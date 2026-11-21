@@ -1,0 +1,48 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Проверка кадров CamWeb</title>
+<style>body{max-width:42rem;margin:2rem auto;padding:0 1rem;font:17px system-ui}video{display:block;width:100%;max-height:45vh;background:#222;margin:1rem 0}button{padding:.6rem;margin:.2rem}</style>
+<h1>Проверка кадров CamWeb</h1><p>Откройте поток в режиме фото и сделайте замер. Затем переключитесь на камеру, подвигайте телефоном и повторите замер.</p>
+<button id="openStream">Открыть поток</button><button id="measure" disabled>Замерить 2 секунды</button><video muted playsinline></video><ol aria-live="polite"></ol>
+<script>
+const video = document.querySelector('video');
+const openStream = document.querySelector('#openStream');
+const measure = document.querySelector('#measure');
+const canvas = document.createElement('canvas');
+canvas.width = 96;
+canvas.height = 54;
+const ctx = canvas.getContext('2d', {willReadFrequently:true});
+function log(message) {
+  const item = document.createElement('li');
+  item.textContent = message;
+  document.querySelector('ol').append(item);
+}
+openStream.onclick = async () => {
+  openStream.disabled = true;
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw Error('Для доступа к потоку откройте страницу по HTTPS в CamWeb.');
+    video.srcObject = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+    await video.play();
+    measure.disabled = false;
+  } catch (e) {
+    video.srcObject?.getTracks().forEach(track => track.stop());
+    openStream.disabled = false;
+    log(e.message);
+  }
+};
+measure.onclick = async () => {
+  measure.disabled = true;
+  try {
+    let previous;
+    let changes = 0;
+    for (let i = 0; i <= 20; i++) {
+      if (i) await new Promise(resolve => setTimeout(resolve, 100));
+      if (video.readyState < 2 || video.srcObject.getVideoTracks()[0]?.readyState !== 'live') throw Error('Нет доступного видеокадра.');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      if (previous && pixels.some((value, index) => value !== previous[index])) changes++;
+      previous = pixels;
+    }
+    log('Изображение изменилось в ' + changes + ' из 20 сравнений при размере 96 × 54.');
+  } catch (e) { log(e.message); }
+  finally { measure.disabled = false; }
+};
+</script></html>
